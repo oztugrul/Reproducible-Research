@@ -1,0 +1,211 @@
+---
+title: "Storm and Severe Weather Event Report that Affect Public Health and Economy in the U.S. 1950 - 2011"
+author: "Ozge Tugrul Sonmez"
+date: "26 Ekim 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Synopsis
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, crop damage. In this report, severe weather events which cause poplulation injuries and fatalities in terms of number of people and also property and crop damages in terms of $ are exhibited by graphics. The most harmful weather events are given sequentially in the plots.
+The most harmful event in terms of population fatalities and injuries is Tornado. The most harmful event in terms of property damage is Flood and in terms of crop damage is drought.
+
+##Data Processing
+
+```{r,include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(reshape2)
+library(RColorBrewer)
+
+```
+
+```{r}
+
+setwd("C:/Users/asus/Desktop/Reproducible Research")
+
+#Downloading Files
+
+if(!file.exists("repdata_data_StormData.csv.bz2")){
+  
+  fileUrl<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+  
+  download.file(fileUrl,destfile="./repdata_data_StormData.csv.bz2")
+}
+
+storm<-read.csv("repdata_data_StormData.csv.bz2", header=TRUE, stringsAsFactors=FALSE) 
+
+head(storm)
+
+#We select 7 variables and multiply PROPDMG with the numerical value of PROPDMGEXP and multiply CROPDMG with the numerical value of CROPDMGEXP.
+
+variables<-c("EVTYPE","FATALITIES","INJURIES","PROPDMG", "PROPDMGEXP","CROPDMG","CROPDMGEXP")
+storm<-storm[variables]
+
+head(storm)
+
+unique(storm$PROPDMGEXP)
+
+unique(storm$CROPDMGEXP)
+
+
+storm_modified<-storm%>%
+  mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP=="K"|PROPDMGEXP==3,10^3))%>%
+  mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP=="M"|PROPDMGEXP=="m"|PROPDMGEXP==6,10^6))%>%
+  mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP==""|PROPDMGEXP=="+"|PROPDMGEXP==0|PROPDMGEXP=="?"|PROPDMGEXP=="-",10^0))%>%
+  mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP=="B",10^9))%>%mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP==5,10^5))%>%
+  mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP==4,10^4))%>%
+  mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP=="h"|PROPDMGEXP=="H"|PROPDMGEXP==2,10^2))%>%
+  mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP==7,10^7))%>%mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP==1,10^1))%>%
+  mutate(PROPDMGEXP=replace(PROPDMGEXP,PROPDMGEXP==8,10^8))%>%
+  mutate(CROPDMGEXP=replace(CROPDMGEXP,CROPDMGEXP==""|CROPDMGEXP==0|CROPDMGEXP=="?",10^0))%>%
+  mutate(CROPDMGEXP=replace(CROPDMGEXP,CROPDMGEXP=="M"|CROPDMGEXP=="m",10^6))%>%
+  mutate(CROPDMGEXP=replace(CROPDMGEXP,CROPDMGEXP=="k"|CROPDMGEXP=="K",10^3))%>%
+  mutate(CROPDMGEXP=replace(CROPDMGEXP,CROPDMGEXP=="B",10^9))%>%
+  mutate(CROPDMGEXP=replace(CROPDMGEXP,CROPDMGEXP==2,10^2))
+  
+head(storm_modified)
+
+storm_modified$PROPDMGEXP<-as.numeric(storm_modified$PROPDMGEXP)
+storm_modified$CROPDMGEXP<-as.numeric(storm_modified$CROPDMGEXP)
+
+
+storm_final<-storm_modified%>%
+  mutate(PROPDMG_FINAL=PROPDMG*PROPDMGEXP)%>%
+  mutate(CROPDMG_FINAL=CROPDMG*CROPDMGEXP)%>%
+  select(EVTYPE,FATALITIES,INJURIES,PROPDMG_FINAL,CROPDMG_FINAL)
+  
+head(storm_final)
+
+```
+
+## Results
+
+### 1- Across the United States, which types of events (as indicated in the \color{red}{\verb|EVTYPE|}EVTYPE variable) are most harmful with respect to population health?
+
+The most harmful 7 events are listed in terms of the sum of both injuries and fatalities. Also, the most 7 events are listed in terms of injuries and fatalities separately and given in bar plots.
+
+```{r}
+
+
+storm_fatalities_injuries<-melt(storm_final,id.vars="EVTYPE",measure.vars=c("FATALITIES","INJURIES"))
+
+storm_fatalities_injuries<-storm_fatalities_injuries%>%
+  group_by(EVTYPE,variable)%>%
+  summarize(total=sum(value))%>%
+  group_by(EVTYPE)%>%
+  mutate(population_total=sum(total))%>%
+  arrange(desc(population_total))
+
+storm_fatalities_injuries<-head(storm_fatalities_injuries,14)
+
+storm_fatalities_injuries
+
+
+p1<-ggplot(data=storm_fatalities_injuries,aes(x=(reorder(EVTYPE,population_total)),y=total,fill=variable))+
+  geom_bar(stat="Identity",position=position_dodge(width = 0.9))+geom_text(aes(label=total), angle=0, size=2,check_overlap = TRUE)+
+  scale_fill_brewer(palette="Dark2")+labs(x="Event Type",y="No of People Affected",title="Most Harmful Events with Respect to Population Health")+
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+
+
+
+storm_fatalities<-storm_final%>%
+  group_by(EVTYPE)%>%
+  summarize(TOTAL_FATALITIES=sum(FATALITIES))%>%
+  arrange(desc(TOTAL_FATALITIES))%>%
+  top_n(7)
+  
+storm_fatalities
+
+p2<-ggplot(data=storm_fatalities,aes(x=(reorder(EVTYPE,TOTAL_FATALITIES)),y=TOTAL_FATALITIES,fill=EVTYPE))+geom_bar(stat="identity")+
+  geom_text(aes(label=TOTAL_FATALITIES), angle=0, size=2,check_overlap = TRUE)+scale_fill_brewer(palette="Spectral")+
+  theme(axis.text.x = element_text(angle=45, hjust=1))+labs(x="Event Type",y="No of Fatalities")
+  
+
+storm_injuries<-storm_final%>%
+  group_by(EVTYPE)%>%
+  summarize(TOTAL_INJURIES=sum(INJURIES))%>%
+  arrange(desc(TOTAL_INJURIES))%>%
+  top_n(7)
+
+storm_injuries
+
+p3<-ggplot(data=storm_injuries,aes(x=(reorder(EVTYPE,TOTAL_INJURIES)),y=TOTAL_INJURIES,fill=EVTYPE))+geom_bar(stat="identity")+
+  geom_text(aes(label=TOTAL_INJURIES), angle=0, size=2,check_overlap = TRUE)+scale_fill_brewer(palette="Spectral")+
+  theme(axis.text.x = element_text(angle=45, hjust=1))+labs(x="Event Type",y="No of Injuries")
+
+
+grid.arrange(arrangeGrob(p1,ncol=1,nrow=1),arrangeGrob(p2,p3,ncol=2),heights=c(2,1.5))
+
+
+#The most harmful events in terms of total population damage are tornado, excessive heat, tstm wind, flood, lightning, heat and flash flood sequentially.
+
+
+#The most harmful events in terms of fatalities are tornado, excessive heat, flash flood, heat, lightning, tstm wind and flood sequentially.
+
+
+#The most harmful events in terms of injuries are tornado, tstm wind, flood, excessive heat, lightning,heat and ice storm.
+
+```
+
+
+
+### 2- Across the United States, which types of events have the greatest economic consequences?
+
+The most harmful 7 events for property damage (in terms of billion dollar) and crop damage (in terms of billion dollar) are given separately in bar plots.
+
+```{r}
+
+storm_prop_crop<-melt(storm_final,id.vars="EVTYPE",measure.vars=c("PROPDMG_FINAL","CROPDMG_FINAL"))
+
+storm_prop_crop<-storm_prop_crop%>%
+  group_by(EVTYPE,variable)%>%
+  summarize(total=sum(value)/10^9)%>%
+  group_by(EVTYPE)%>%
+  mutate(prop_and_crop_total=sum(total))%>%
+  arrange(desc(prop_and_crop_total))
+
+storm_prop_crop<-head(storm_prop_crop,14)
+
+storm_prop_crop
+
+library(RColorBrewer)
+
+
+storm_prop_dmg<-storm_final%>%
+  group_by(EVTYPE)%>%
+  summarize(TOTAL_PROP_DMG=round(sum(PROPDMG_FINAL)/10^9,1))%>%
+  arrange(desc(TOTAL_PROP_DMG))%>%
+  top_n(7)
+
+p4<-ggplot(data=storm_prop_dmg,aes(x=(reorder(EVTYPE,TOTAL_PROP_DMG)),y=TOTAL_PROP_DMG,fill=EVTYPE))+geom_bar(stat="identity")+
+  geom_text(aes(label=TOTAL_PROP_DMG), angle=0, size=3,check_overlap = TRUE)+scale_fill_brewer(palette="Purples")+
+  theme(axis.text.x = element_text(angle=45, hjust=1))+labs(x="Event Type",y="Total Property Damage (billion $)",title="Most Harmful Events with Respect to Property Damage")
+
+p4
+
+
+#The most harmful events in property damage are flood, hurricane/typhoon, tornado, storm surge, flash flood, hail and hurricane sequentially.
+
+
+storm_crop_dmg<-storm_final%>%
+  group_by(EVTYPE)%>%
+  summarize(TOTAL_CROP_DMG=round(sum(CROPDMG_FINAL)/10^9,2))%>%
+  arrange(desc(TOTAL_CROP_DMG))%>%
+  top_n(7)
+
+p5<-ggplot(data=storm_crop_dmg,aes(x=(reorder(EVTYPE,TOTAL_CROP_DMG)),y=TOTAL_CROP_DMG,fill=EVTYPE))+geom_bar(stat="identity")+
+  geom_text(aes(label=TOTAL_CROP_DMG), angle=0, size=3,check_overlap = TRUE)+scale_fill_brewer(palette="Greens")+
+  theme(axis.text.x = element_text(angle=45, hjust=1))+labs(x="Event Type",y="Total Crop Damage (billion $)",title="Most Harmful Events with Respect to Crop Damage")
+
+p5
+
+
+#The most harmful events in crop damage are drought, flood, river flood, ice storm, hail, hurricane and hurricane/typhoon sequentially.
+
+```
+
